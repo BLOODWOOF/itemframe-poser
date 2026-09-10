@@ -3,10 +3,15 @@
 	"id": "frameposer",
 	"version": "${version}",
 	"name": "Item Frame Poser",
-	"description": "Look at an item frame and press a keybind to pose the displayed item.",
+	"description": "Look at an item frame and press a keybind to pose the item with rotation, offset, and scale.",
 	"authors": [
 		"BLOODWOLF"
 	],
+	"contact": {
+		"homepage": "https://github.com/BLOODWOOF/itemframe-poser",
+		"sources": "https://github.com/BLOODWOOF/itemframe-poser",
+		"issues": "https://github.com/BLOODWOOF/itemframe-poser/issues"
+	},
 	"license": "MIT",
 	"icon": "assets/frameposer/icon.png",
 	"environment": "*",
