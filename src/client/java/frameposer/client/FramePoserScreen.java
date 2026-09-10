@@ -1,5 +1,7 @@
 package frameposer.client;
 
+import java.util.ArrayList;
+import java.util.List;
 import frameposer.FrameHandle;
 import frameposer.FrameLookup;
 import frameposer.FramePose;
@@ -22,7 +24,7 @@ public class FramePoserScreen extends Screen {
 	private static final int MUTED = 0xFFA0A0A0;
 	private static final int PANEL = 0xC0101010;
 	private static final int SLOT = 0x80000000;
-	private static final int PANEL_W = 360;
+	private static final int PANEL_W = 408;
 	private static final int PANEL_H = 218;
 	private static FrameSnapshot clipboard;
 
@@ -39,6 +41,7 @@ public class FramePoserScreen extends Screen {
 	private boolean packetWaiting;
 	private boolean lastNetworked = true;
 	private boolean lastCanGlow = true;
+	private boolean swapping;
 
 	public FramePoserScreen(FrameHandle handle) {
 		super(Component.translatable("frameposer.gui.title"));
@@ -52,14 +55,27 @@ public class FramePoserScreen extends Screen {
 	public static FramePoserScreen current;
 
 	public static boolean owns(FrameHandle handle) {
-		return current != null && current.snapshot != null && current.snapshot.handle().equals(handle);
+		if (current == null || current.snapshot == null) {
+			return false;
+		}
+		if (current.snapshot.handle().equals(handle)) {
+			return true;
+		}
+		if (!FrameGroups.editMode() || current.minecraft == null || current.minecraft.level == null) {
+			return false;
+		}
+		String key = ClientFramePoses.cloudKey(current.minecraft.level, handle);
+		return key != null && FrameGroups.contains(FrameGroups.selected(), key);
 	}
 
 	boolean ownsCloudKey(String key) {
-		if (this.snapshot == null || this.minecraft == null || this.minecraft.level == null) {
+		if (this.snapshot == null || this.minecraft == null || this.minecraft.level == null || key == null) {
 			return false;
 		}
-		return key.equals(ClientFramePoses.cloudKey(this.minecraft.level, this.snapshot.handle()));
+		if (key.equals(ClientFramePoses.cloudKey(this.minecraft.level, this.snapshot.handle()))) {
+			return true;
+		}
+		return FrameGroups.editMode() && FrameGroups.contains(FrameGroups.selected(), key);
 	}
 
 	public boolean isValid() {
@@ -69,6 +85,23 @@ public class FramePoserScreen extends Screen {
 	public void retarget(FrameHandle from, FrameHandle to) {
 		if (this.snapshot != null && this.snapshot.handle().equals(from)) {
 			this.snapshot = this.snapshot.withHandle(to);
+		}
+	}
+
+	public void jumpTo(FrameHandle handle) {
+		if (this.minecraft == null || this.minecraft.level == null) {
+			return;
+		}
+		var next = FrameLookup.snapshot(this.minecraft.level, handle);
+		if (next != null) {
+			this.snapshot = next.withPose(ClientFramePoses.overlay(this.minecraft.level, handle, next.pose()));
+		}
+	}
+
+	void openChild(Screen child) {
+		this.swapping = true;
+		if (this.minecraft != null) {
+			this.minecraft.gui.setScreen(child);
 		}
 	}
 
@@ -115,8 +148,8 @@ public class FramePoserScreen extends Screen {
 			this.snapshot.pose().scale()
 		};
 		float[] steps = {1.0F, 1.0F, 1.0F, 0.05F, 0.05F, 0.05F, 0.05F};
-		float[] mins = {-360.0F, -360.0F, -360.0F, -4.0F, -4.0F, -4.0F, 0.05F};
-		float[] maxs = {360.0F, 360.0F, 360.0F, 4.0F, 4.0F, 4.0F, 8.0F};
+		float[] mins = {-360.0F, -360.0F, -360.0F, Float.NaN, Float.NaN, Float.NaN, 0.05F};
+		float[] maxs = {360.0F, 360.0F, 360.0F, Float.NaN, Float.NaN, Float.NaN, 8.0F};
 		int[] fieldYs = {this.panelY + 38, this.panelY + 60, this.panelY + 82, this.panelY + 116, this.panelY + 138, this.panelY + 160, this.panelY + 116};
 		int[] fieldXs = {right + 12, right + 12, right + 12, right + 12, right + 12, right + 12, right + 108};
 
@@ -125,14 +158,15 @@ public class FramePoserScreen extends Screen {
 		}
 
 		int bottom = this.panelY + PANEL_H - 26;
-		this.addRenderableWidget(Button.builder(Component.translatable("frameposer.gui.copy"), button -> this.copy()).bounds(left, bottom, 50, 20).build());
-		this.addRenderableWidget(Button.builder(Component.translatable("frameposer.gui.paste"), button -> this.paste()).bounds(left + 54, bottom, 50, 20).build());
-		this.addRenderableWidget(Button.builder(Component.translatable("frameposer.gui.reset"), button -> this.reset()).bounds(left + 108, bottom, 50, 20).build());
-		this.addRenderableWidget(Button.builder(Component.translatable("frameposer.gui.presets"), button -> {
-			if (this.minecraft != null) {
-				this.minecraft.gui.setScreen(new PosePresetScreen(this));
-			}
-		}).bounds(left + 162, bottom, 58, 20).build());
+		this.addRenderableWidget(Button.builder(Component.translatable("frameposer.gui.copy"), button -> this.copy()).bounds(left, bottom, 46, 20).build());
+		this.addRenderableWidget(Button.builder(Component.translatable("frameposer.gui.paste"), button -> this.paste()).bounds(left + 50, bottom, 46, 20).build());
+		this.addRenderableWidget(Button.builder(Component.translatable("frameposer.gui.reset"), button -> this.reset()).bounds(left + 100, bottom, 46, 20).build());
+		this.addRenderableWidget(Button.builder(Component.translatable("frameposer.gui.presets"), button -> this.openChild(new PosePresetScreen(this)))
+			.bounds(left + 150, bottom, 54, 20).build());
+		this.addRenderableWidget(Button.builder(Component.translatable("frameposer.gui.groups"), button -> this.openChild(new FrameGroupScreen(this)))
+			.bounds(left + 208, bottom, 54, 20)
+			.tooltip(Tooltip.create(Component.translatable("frameposer.gui.tooltip.group")))
+			.build());
 		this.addRenderableWidget(Button.builder(Component.translatable("frameposer.gui.done"), button -> this.onClose())
 			.bounds(this.panelX + PANEL_W - 70, bottom, 58, 20).build());
 
@@ -298,21 +332,76 @@ public class FramePoserScreen extends Screen {
 		this.sendDelay = 0;
 	}
 
+	void poseGroup() {
+		if (this.minecraft == null || this.minecraft.level == null || this.snapshot == null) {
+			return;
+		}
+		if (this.fields[0] != null) {
+			this.snapshot = this.snapshot.withPose(this.readPose());
+		}
+		List<FrameHandle> members = FrameGroups.members(this.minecraft.level, FrameGroups.selected());
+		if (members.isEmpty()) {
+			members = List.of(this.snapshot.handle());
+		} else if (!members.contains(this.snapshot.handle())) {
+			members = new ArrayList<>(members);
+			members.add(0, this.snapshot.handle());
+		}
+		this.applyPoseTo(members);
+		this.packetWaiting = false;
+		this.sendDelay = 0;
+	}
+
 	private void sendPacket() {
 		if (this.snapshot == null || this.minecraft == null || this.minecraft.level == null) {
 			return;
 		}
 		FramePose pose = this.fields[0] == null ? this.snapshot.pose() : this.readPose();
 		this.snapshot = this.snapshot.withPose(pose);
-		ClientFramePoses.store(this.minecraft.level, this.snapshot.handle(), pose);
-		PoseCloud.push(this.minecraft.level, this.snapshot.handle(), pose);
-		if (ClientPlayNetworking.canSend(UpdateFramePosePayload.TYPE)) {
-			ClientPlayNetworking.send(new UpdateFramePosePayload(
-				this.snapshot.handle(),
-				pose,
-				this.snapshot.invisible(),
-				this.snapshot.glowing()
-			));
+		this.applyPoseTo(this.targets());
+	}
+
+	private List<FrameHandle> targets() {
+		if (!FrameGroups.editMode() || this.minecraft == null || this.minecraft.level == null || this.snapshot == null) {
+			return List.of(this.snapshot.handle());
+		}
+		List<FrameHandle> members = new ArrayList<>(FrameGroups.members(this.minecraft.level, FrameGroups.selected()));
+		if (!members.contains(this.snapshot.handle())) {
+			members.add(0, this.snapshot.handle());
+		}
+		if (members.isEmpty()) {
+			members.add(this.snapshot.handle());
+		}
+		return members;
+	}
+
+	private void applyPoseTo(List<FrameHandle> handles) {
+		if (this.minecraft == null || this.minecraft.level == null || this.minecraft.player == null || this.snapshot == null) {
+			return;
+		}
+		FramePose pose = this.snapshot.pose();
+		boolean invisible = this.snapshot.invisible();
+		boolean wantGlow = this.snapshot.glowing();
+		boolean networked = ClientPlayNetworking.canSend(UpdateFramePosePayload.TYPE);
+		int sacs = GlowInk.count(this.minecraft.player);
+		boolean creative = this.minecraft.player.hasInfiniteMaterials();
+		for (FrameHandle handle : handles) {
+			var live = FrameLookup.snapshot(this.minecraft.level, handle);
+			if (live == null) {
+				continue;
+			}
+			boolean glow = wantGlow;
+			if (glow && !live.glowing()) {
+				if (!creative && sacs <= 0) {
+					glow = false;
+				} else if (!creative) {
+					sacs--;
+				}
+			}
+			ClientFramePoses.store(this.minecraft.level, handle, pose);
+			PoseCloud.push(this.minecraft.level, handle, pose);
+			if (networked) {
+				ClientPlayNetworking.send(new UpdateFramePosePayload(handle, pose, invisible, glow));
+			}
 		}
 	}
 
@@ -386,6 +475,13 @@ public class FramePoserScreen extends Screen {
 
 	@Override
 	public void onClose() {
+		if (this.swapping) {
+			this.swapping = false;
+			if (this.packetWaiting) {
+				this.sendPacket();
+			}
+			return;
+		}
 		if (this.packetWaiting) {
 			this.sendPacket();
 		}

@@ -113,4 +113,12 @@ public final class FrameLookup {
 		}
 		return player.level().getBlockEntity(pos);
 	}
+
+	public static Vec3 origin(Level level, FrameHandle handle) {
+		if (handle.block()) {
+			return Vec3.atCenterOf(handle.pos());
+		}
+		Entity entity = level.getEntity(handle.entityId());
+		return entity == null ? null : entity.position();
+	}
 }

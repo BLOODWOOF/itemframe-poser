@@ -19,7 +19,7 @@ public class NumberFieldBox extends EditBox {
 		this.step = step;
 		this.min = min;
 		this.max = max;
-		this.setMaxLength(12);
+		this.setMaxLength(16);
 	}
 
 	@Override
@@ -42,14 +42,22 @@ public class NumberFieldBox extends EditBox {
 			return fallback;
 		}
 		try {
-			return Mth.clamp(Float.parseFloat(text), this.min, this.max);
+			float parsed = Float.parseFloat(text);
+			if (!Float.isFinite(this.min) || !Float.isFinite(this.max)) {
+				return parsed;
+			}
+			return Mth.clamp(parsed, this.min, this.max);
 		} catch (NumberFormatException ignored) {
 			return fallback;
 		}
 	}
 
 	public void setFloatValue(float value) {
-		this.setValue(format(Mth.clamp(value, this.min, this.max)));
+		float clamped = value;
+		if (Float.isFinite(this.min) && Float.isFinite(this.max)) {
+			clamped = Mth.clamp(value, this.min, this.max);
+		}
+		this.setValue(format(clamped));
 	}
 
 	public void nudge(double scrollY) {

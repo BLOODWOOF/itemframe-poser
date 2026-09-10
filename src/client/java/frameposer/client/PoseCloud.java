@@ -51,6 +51,7 @@ public final class PoseCloud {
 	private static final Set<String> fifKeys = new HashSet<>();
 	private static final Set<String> visible = new HashSet<>();
 	private static final Map<String, CloudPose> dump = new HashMap<>();
+	private static final Map<String, CloudPose> applied = new HashMap<>();
 	private static String dumpEtag = "";
 	private static long dumpAt;
 	private static boolean dumpHadPoses;
@@ -79,8 +80,8 @@ public final class PoseCloud {
 		boolean scan = client.player.tickCount % 5 == 0;
 		if (scan || !pending.isEmpty()) {
 			collectNearby(client, !pending.isEmpty() || client.player.tickCount % 40 == 0);
-			if (dumpAt != 0) {
-				applyDump();
+			if (dumpAt != 0 && !pending.isEmpty()) {
+				applyDump(false);
 			}
 			pending.clear();
 		}
@@ -152,6 +153,7 @@ public final class PoseCloud {
 		fifKeys.clear();
 		visible.clear();
 		dump.clear();
+		applied.clear();
 		dumpEtag = "";
 		dumpAt = 0;
 		dumpHadPoses = false;
@@ -183,8 +185,11 @@ public final class PoseCloud {
 			dumpEtag = "";
 			if (waiting.empty) {
 				dump.remove(waiting.key);
+				applied.remove(waiting.key);
 			} else {
-				dump.put(waiting.key, GSON.fromJson(waiting.json, CloudPose.class));
+				CloudPose pose = GSON.fromJson(waiting.json, CloudPose.class);
+				dump.put(waiting.key, pose);
+				applied.put(waiting.key, pose);
 			}
 			done.add(waiting.key);
 		}
@@ -218,7 +223,7 @@ public final class PoseCloud {
 				if (code == 304) {
 					Minecraft.getInstance().execute(() -> {
 						dumpAt = System.currentTimeMillis();
-						applyDump();
+						applyDump(true);
 					});
 					return;
 				}
@@ -250,27 +255,37 @@ public final class PoseCloud {
 		}
 		dumpEtag = tag == null ? "" : tag;
 		dumpAt = System.currentTimeMillis();
-		applyDump();
+		applyDump(false);
 	}
 
 	private static boolean validDumpKey(String key) {
 		return key != null && (key.startsWith("e:") || key.startsWith("b:")) && !key.contains("..");
 	}
 
-	private static void applyDump() {
+	// only paint a frame when its new or the dump pose actually moved
+	private static void applyDump(boolean newcomersOnly) {
 		for (String key : visible) {
 			if (editing(key)) {
 				continue;
 			}
+			byte was = status.getOrDefault(key, UNKNOWN);
+			if (newcomersOnly && was != UNKNOWN) {
+				continue;
+			}
 			CloudPose cloud = dump.get(key);
 			if (cloud == null) {
-				if (status.getOrDefault(key, UNKNOWN) == POSED) {
+				if (was == POSED) {
 					ClientFramePoses.applyCloud(key, FramePose.IDENTITY);
 				}
+				applied.remove(key);
 				status.put(key, EMPTY);
 				continue;
 			}
+			if (was != UNKNOWN && cloud.equals(applied.get(key))) {
+				continue;
+			}
 			ClientFramePoses.applyCloud(key, cloud.toPose());
+			applied.put(key, cloud);
 			status.put(key, POSED);
 		}
 	}
@@ -417,6 +432,39 @@ public final class PoseCloud {
 
 		FramePose toPose() {
 			return new FramePose(rotX, rotY, rotZ, offX, offY, offZ, scale <= 0.0F ? 1.0F : scale, fixed, invulnerable).sanitized();
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof CloudPose pose)) {
+				return false;
+			}
+			return Float.compare(rotX, pose.rotX) == 0
+				&& Float.compare(rotY, pose.rotY) == 0
+				&& Float.compare(rotZ, pose.rotZ) == 0
+				&& Float.compare(offX, pose.offX) == 0
+				&& Float.compare(offY, pose.offY) == 0
+				&& Float.compare(offZ, pose.offZ) == 0
+				&& Float.compare(scale, pose.scale) == 0
+				&& fixed == pose.fixed
+				&& invulnerable == pose.invulnerable;
+		}
+
+		@Override
+		public int hashCode() {
+			int hash = Float.hashCode(rotX);
+			hash = 31 * hash + Float.hashCode(rotY);
+			hash = 31 * hash + Float.hashCode(rotZ);
+			hash = 31 * hash + Float.hashCode(offX);
+			hash = 31 * hash + Float.hashCode(offY);
+			hash = 31 * hash + Float.hashCode(offZ);
+			hash = 31 * hash + Float.hashCode(scale);
+			hash = 31 * hash + Boolean.hashCode(fixed);
+			hash = 31 * hash + Boolean.hashCode(invulnerable);
+			return hash;
 		}
 	}
 }

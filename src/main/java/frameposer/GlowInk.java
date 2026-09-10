@@ -35,4 +35,19 @@ public final class GlowInk {
 		}
 		return false;
 	}
+
+	public static int count(Player player) {
+		if (player.hasInfiniteMaterials()) {
+			return Integer.MAX_VALUE;
+		}
+		int total = 0;
+		Inventory inventory = player.getInventory();
+		for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+			ItemStack stack = inventory.getItem(slot);
+			if (stack.is(Items.GLOW_INK_SAC)) {
+				total += stack.getCount();
+			}
+		}
+		return total;
+	}
 }

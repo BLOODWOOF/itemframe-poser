@@ -12,6 +12,7 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import net.fabricmc.loader.api.FabricLoader;
@@ -149,6 +150,7 @@ public final class ClientFramePoses {
 		ENTITIES.clear();
 		BLOCKS.clear();
 		PENDING.clear();
+		FrameGroups.clear();
 		loadedKey = key;
 		Path file = fileFor(key);
 		if (!Files.exists(file)) {
@@ -170,6 +172,7 @@ public final class ClientFramePoses {
 			if (saved.blocks != null) {
 				BLOCKS.putAll(saved.blocks);
 			}
+			FrameGroups.load(saved.groups);
 		} catch (Exception ignored) {
 		}
 	}
@@ -180,6 +183,11 @@ public final class ClientFramePoses {
 		BLOCKS.clear();
 		PENDING.clear();
 		dirty = false;
+	}
+
+	public static void markDirty() {
+		ensureLoaded();
+		dirty = true;
 	}
 
 	public static String serverKey() {
@@ -230,6 +238,7 @@ public final class ClientFramePoses {
 		ENTITIES.clear();
 		BLOCKS.clear();
 		PENDING.clear();
+		FrameGroups.clear();
 		loadedKey = null;
 	}
 
@@ -264,6 +273,7 @@ public final class ClientFramePoses {
 		Saved saved = new Saved();
 		ENTITIES.forEach((id, pose) -> saved.entities.put(id.toString(), pose));
 		saved.blocks.putAll(BLOCKS);
+		saved.groups.putAll(FrameGroups.export());
 		Path file = fileFor(loadedKey);
 		try {
 			Files.createDirectories(file.getParent());
@@ -301,5 +311,6 @@ public final class ClientFramePoses {
 	private static final class Saved {
 		Map<String, FramePose> entities = new HashMap<>();
 		Map<String, FramePose> blocks = new HashMap<>();
+		Map<String, java.util.List<String>> groups = new HashMap<>();
 	}
 }

@@ -1,6 +1,8 @@
 package frameposer;
 
 import frameposer.client.ClientFramePoses;
+import frameposer.client.FrameGroupScreen;
+import frameposer.client.FrameGroups;
 import frameposer.client.FramePoserScreen;
 import frameposer.client.PoseCloud;
 import frameposer.client.PoseCloudConfig;
@@ -83,21 +85,40 @@ public class FramePoserClient implements ClientModInitializer {
 	}
 
 	private static void openLookedAt(Minecraft minecraft) {
-		if (minecraft.player == null || minecraft.level == null || minecraft.gui.screen() != null) {
+		if (minecraft.player == null || minecraft.level == null) {
 			return;
 		}
+		FrameHandle looked = lookedAt(minecraft);
+		if (looked == null) {
+			return;
+		}
+		if (minecraft.gui.screen() instanceof FramePoserScreen || minecraft.gui.screen() instanceof FrameGroupScreen) {
+			FrameGroups.toggle(minecraft.level, looked);
+			if (minecraft.gui.screen() instanceof FrameGroupScreen groupScreen) {
+				groupScreen.notice(looked);
+			}
+			return;
+		}
+		if (minecraft.gui.screen() != null) {
+			return;
+		}
+		open(looked);
+	}
+
+	private static FrameHandle lookedAt(Minecraft minecraft) {
 		HitResult hit = minecraft.hitResult;
 		if (hit instanceof EntityHitResult entityHit && entityHit.getEntity() instanceof ItemFrame frame) {
 			if (FrameLookup.inRange(minecraft.player, frame)) {
-				open(FrameHandle.entity(frame.getId()));
+				return FrameHandle.entity(frame.getId());
 			}
-			return;
+			return null;
 		}
 		if (hit instanceof BlockHitResult blockHit
 			&& FastFrames.isFrameBlock(minecraft.level.getBlockState(blockHit.getBlockPos()))
 			&& FrameLookup.inRange(minecraft.player, blockHit.getBlockPos())) {
-			open(FrameHandle.block(blockHit.getBlockPos()));
+			return FrameHandle.block(blockHit.getBlockPos());
 		}
+		return null;
 	}
 
 	private static void open(FrameHandle handle) {

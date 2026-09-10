@@ -6,6 +6,7 @@ import frameposer.FramePoseHolder;
 import frameposer.FramePoseTransforms;
 import frameposer.FramePoserAttachments;
 import frameposer.client.ClientFramePoses;
+import frameposer.client.FrameGlowHandler;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.ItemFrameRenderer;
 import net.minecraft.client.renderer.entity.state.ItemFrameRenderState;
@@ -26,6 +27,9 @@ public class ItemFrameRendererMixin {
 	private void frameposer$extract(ItemFrame frame, ItemFrameRenderState state, float partialTick, CallbackInfo ci) {
 		if (state instanceof FramePoseHolder holder) {
 			holder.frameposer$setPose(pickPose(frame));
+		}
+		if (FrameGlowHandler.isGlowing(frame)) {
+			FrameGlowHandler.tint(state);
 		}
 	}
 

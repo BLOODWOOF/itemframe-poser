@@ -10,7 +10,7 @@ Made by **BLOODWOLF** for Fabric on **Minecraft 26.2**.
 - Offset on X, Y, and Z
 - Uniform scale
 - Invisible, fixed, glowing, and invulnerable toggles
-- Copy, paste, reset, and named presets
+- Copy, paste, reset, named presets, and frame groups
 - Works on vanilla item frames and [Fast Item Frames](https://modrinth.com/mod/fast-item-frames)
 - Other players with this mod can see your poses
 - Players without the mod still see a normal item frame
@@ -20,6 +20,8 @@ Made by **BLOODWOLF** for Fabric on **Minecraft 26.2**.
 Look at a frame from close range and press **K**. That key can be changed in Controls under Item Frame Poser.
 
 The menu sits on the left so the frame stays in view. Scroll over a number to nudge it. Hold Shift for bigger steps, or Ctrl for finer ones.
+
+**Group** lets you pose a bunch of frames at once, same idea as Armor Poser. Pick a numbered group, look at another frame and press **K** to add or remove it, or use the nearby list. **Pose Group** copies the current pose onto every member. Turn on **Group Edit** if you want slider drags to hit the whole group. Glow still costs one Glow Ink Sac per frame that turns on.
 
 Turning **Glowing** on uses one Glow Ink Sac in Survival. Creative mode does not charge you.
 

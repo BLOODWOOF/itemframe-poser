@@ -5,6 +5,7 @@ import frameposer.FramePose;
 import frameposer.FramePoseHolder;
 import frameposer.FramePoserAttachments;
 import frameposer.client.ClientFramePoses;
+import frameposer.client.FrameGlowHandler;
 import net.minecraft.client.renderer.entity.state.ItemFrameRenderState;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
@@ -25,6 +26,9 @@ public class ItemFrameBlockRendererMixin {
 		ItemFrameRenderState nested = nestedState(renderState);
 		if (nested instanceof FramePoseHolder holder && blockEntity != null) {
 			holder.frameposer$setPose(pickPose(blockEntity));
+		}
+		if (nested != null && blockEntity != null && FrameGlowHandler.isGlowing(blockEntity.getBlockPos())) {
+			FrameGlowHandler.tint(nested);
 		}
 	}
 
