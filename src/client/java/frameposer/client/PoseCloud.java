@@ -26,14 +26,14 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 
 public final class PoseCloud {
-	// wait a couple ticks so a chunks worth of frames pile up, then
-	// ask for all of them in one shot instead of one http call each
+	// one dump for the whole minecraft server, then we just paint whatever
+	// is in view. slider drags get coalesced so we dont put every twitch
 	private static final Gson GSON = new Gson();
 	private static final Duration TIMEOUT = Duration.ofSeconds(3);
-	private static final int MAX_QUERY = 64;
 	private static final int SETTLE_TICKS = 5;
-	private static final long POSED_MS = 2500L;
-	private static final long EMPTY_MS = 60000L;
+	private static final long PUSH_GAP_MS = 1000L;
+	private static final long DUMP_POSED_MS = 2000L;
+	private static final long DUMP_EMPTY_MS = 5000L;
 
 	private static final byte UNKNOWN = 0;
 	private static final byte EMPTY = 1;
@@ -43,12 +43,17 @@ public final class PoseCloud {
 		.connectTimeout(TIMEOUT)
 		.build();
 
-	private static final Map<String, Long> lastFetch = new HashMap<>();
 	private static final Map<String, Byte> status = new HashMap<>();
-	private static final Map<String, String> lastPush = new HashMap<>();
+	private static final Map<String, String> lastSent = new HashMap<>();
+	private static final Map<String, Long> lastSentAt = new HashMap<>();
+	private static final Map<String, Outgoing> outbound = new HashMap<>();
 	private static final Set<String> pending = new HashSet<>();
 	private static final Set<String> fifKeys = new HashSet<>();
 	private static final Set<String> visible = new HashSet<>();
+	private static final Map<String, CloudPose> dump = new HashMap<>();
+	private static String dumpEtag = "";
+	private static long dumpAt;
+	private static boolean dumpHadPoses;
 	private static boolean querying;
 	private static String lastServer;
 	private static int settleTicks;
@@ -58,14 +63,13 @@ public final class PoseCloud {
 	}
 
 	public static void tick(Minecraft client) {
+		flushPushes(false);
 		if (client.player == null || client.level == null || !ClientFramePoses.multiplayer()) {
 			return;
 		}
-		if (querying) {
-			return;
-		}
 		String server = ClientFramePoses.serverKey();
-		if (!server.equals(lastServer)) {
+		if (lastServer == null || !lastServer.equals(server)) {
+			flushPushes(true);
 			clear();
 			lastServer = server;
 		}
@@ -73,11 +77,22 @@ public final class PoseCloud {
 			return;
 		}
 		boolean scan = client.player.tickCount % 5 == 0;
-		if (pending.isEmpty() && !scan) {
+		if (scan || !pending.isEmpty()) {
+			collectNearby(client, !pending.isEmpty() || client.player.tickCount % 40 == 0);
+			if (dumpAt != 0) {
+				applyDump();
+			}
+			pending.clear();
+		}
+		if (querying) {
 			return;
 		}
-		collectNearby(client, !pending.isEmpty() || client.player.tickCount % 40 == 0);
-		query(server);
+		long now = System.currentTimeMillis();
+		long gap = dumpHadPoses ? DUMP_POSED_MS : DUMP_EMPTY_MS;
+		if (dumpAt != 0 && now - dumpAt < gap) {
+			return;
+		}
+		fetchDump(server);
 	}
 
 	public static void notice(String key) {
@@ -95,132 +110,176 @@ public final class PoseCloud {
 			return;
 		}
 		String key = ClientFramePoses.cloudKey(level, handle);
-		if (key == null) {
-			return;
-		}
-		String base = baseUrl();
-		if (base == null) {
+		if (key == null || baseUrl() == null) {
 			return;
 		}
 		FramePose next = pose == null ? FramePose.IDENTITY : pose.sanitized();
 		String json = GSON.toJson(CloudPose.from(next));
-		if (json.equals(lastPush.get(key))) {
+		if (json.equals(lastSent.get(key))) {
+			outbound.remove(key);
 			return;
 		}
-		lastPush.put(key, json);
-		send("PUT", uri(base, ClientFramePoses.serverKey(), key), json);
 		long now = System.currentTimeMillis();
-		lastFetch.put(key, now);
-		status.put(key, next.equals(FramePose.IDENTITY) ? EMPTY : POSED);
-		pending.remove(key);
+		Outgoing waiting = new Outgoing();
+		waiting.server = ClientFramePoses.serverKey();
+		waiting.key = key;
+		waiting.json = json;
+		waiting.empty = next.equals(FramePose.IDENTITY);
+		Long sentAt = lastSentAt.get(key);
+		if (sentAt == null || now - sentAt >= PUSH_GAP_MS) {
+			waiting.due = now;
+		} else {
+			waiting.due = sentAt + PUSH_GAP_MS;
+		}
+		outbound.put(key, waiting);
+	}
+
+	public static void flush() {
+		flushPushes(true);
 	}
 
 	public static void disconnect() {
+		flushPushes(true);
 		clear();
 	}
 
 	private static void clear() {
-		lastFetch.clear();
 		status.clear();
-		lastPush.clear();
+		lastSent.clear();
+		lastSentAt.clear();
+		outbound.clear();
 		pending.clear();
 		fifKeys.clear();
 		visible.clear();
+		dump.clear();
+		dumpEtag = "";
+		dumpAt = 0;
+		dumpHadPoses = false;
 		lastServer = null;
 		querying = false;
 		settleTicks = 0;
 	}
 
-	private static void query(String server) {
+	private static void flushPushes(boolean all) {
+		if (outbound.isEmpty()) {
+			return;
+		}
+		String base = baseUrl();
+		if (base == null) {
+			outbound.clear();
+			return;
+		}
+		long now = System.currentTimeMillis();
+		List<String> done = new ArrayList<>();
+		for (Outgoing waiting : outbound.values()) {
+			if (!all && now < waiting.due) {
+				continue;
+			}
+			send("PUT", uri(base, waiting.server, waiting.key), waiting.json);
+			lastSent.put(waiting.key, waiting.json);
+			lastSentAt.put(waiting.key, now);
+			status.put(waiting.key, waiting.empty ? EMPTY : POSED);
+			pending.remove(waiting.key);
+			dumpEtag = "";
+			if (waiting.empty) {
+				dump.remove(waiting.key);
+			} else {
+				dump.put(waiting.key, GSON.fromJson(waiting.json, CloudPose.class));
+			}
+			done.add(waiting.key);
+		}
+		dumpHadPoses = !dump.isEmpty();
+		for (String key : done) {
+			outbound.remove(key);
+		}
+	}
+
+	private static void fetchDump(String server) {
 		String base = baseUrl();
 		if (base == null) {
 			return;
 		}
-		long now = System.currentTimeMillis();
-		List<String> wanted = new ArrayList<>();
-		Set<String> picked = new HashSet<>();
-		for (String key : pending) {
-			if (!isDue(key, now) || !picked.add(key)) {
-				continue;
-			}
-			wanted.add(key);
-			if (wanted.size() >= MAX_QUERY) {
-				break;
-			}
-		}
-		if (wanted.size() < MAX_QUERY) {
-			for (String key : visible) {
-				if (!isDue(key, now) || !picked.add(key)) {
-					continue;
-				}
-				wanted.add(key);
-				if (wanted.size() >= MAX_QUERY) {
-					break;
-				}
-			}
-		}
-		if (wanted.isEmpty()) {
-			return;
-		}
 		querying = true;
-		pending.removeAll(wanted);
-		QueryBody body = new QueryBody();
-		body.keys = wanted;
-		HttpRequest request = HttpRequest.newBuilder(URI.create(base + "/v1/servers/" + enc(server) + "/query"))
+		HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(base + "/v1/servers/" + enc(server)))
 			.timeout(TIMEOUT)
-			.header("Content-Type", "application/json")
 			.header("User-Agent", "FramePoser")
-			.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(body)))
-			.build();
-		HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+			.GET();
+		if (!dumpEtag.isEmpty()) {
+			builder.header("If-None-Match", dumpEtag);
+		}
+		HTTP.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
 			.whenComplete((response, error) -> {
 				querying = false;
-				if (error != null || response == null || response.statusCode() / 100 != 2) {
-					for (String key : wanted) {
-						pending.add(key);
-					}
+				if (error != null || response == null) {
+					Minecraft.getInstance().execute(PoseCloud::markDumpAttempt);
 					return;
 				}
+				int code = response.statusCode();
+				if (code == 304) {
+					Minecraft.getInstance().execute(() -> {
+						dumpAt = System.currentTimeMillis();
+						applyDump();
+					});
+					return;
+				}
+				if (code / 100 != 2) {
+					Minecraft.getInstance().execute(PoseCloud::markDumpAttempt);
+					return;
+				}
+				String tag = response.headers().firstValue("ETag").orElse("");
 				QueryResult result = GSON.fromJson(response.body(), QueryResult.class);
-				Minecraft.getInstance().execute(() -> applyResult(wanted, result, System.currentTimeMillis()));
+				Minecraft.getInstance().execute(() -> takeDump(result, tag));
 			});
 	}
 
-	private static boolean isDue(String key, long now) {
-		Long seen = lastFetch.get(key);
-		if (seen == null) {
-			return true;
-		}
-		byte state = status.getOrDefault(key, UNKNOWN);
-		if (state == EMPTY) {
-			return now - seen >= EMPTY_MS;
-		}
-		if (state == POSED) {
-			return now - seen >= POSED_MS;
-		}
-		return true;
+	private static void markDumpAttempt() {
+		dumpAt = System.currentTimeMillis();
 	}
 
-	private static void applyResult(List<String> wanted, QueryResult result, long now) {
-		Set<String> hit = new HashSet<>();
+	private static void takeDump(QueryResult result, String tag) {
+		dump.clear();
+		dumpHadPoses = false;
 		if (result != null && result.frames != null) {
 			result.frames.forEach((key, cloud) -> {
-				if (cloud == null) {
+				if (cloud == null || !validDumpKey(key)) {
 					return;
 				}
-				hit.add(key);
-				FramePose pose = cloud.toPose();
-				ClientFramePoses.applyCloud(key, pose);
-				lastFetch.put(key, now);
-				status.put(key, pose.equals(FramePose.IDENTITY) ? EMPTY : POSED);
+				dump.put(key, cloud);
+				dumpHadPoses = true;
 			});
 		}
-		for (String key : wanted) {
-			lastFetch.put(key, now);
-			if (!hit.contains(key)) {
-				status.put(key, EMPTY);
+		dumpEtag = tag == null ? "" : tag;
+		dumpAt = System.currentTimeMillis();
+		applyDump();
+	}
+
+	private static boolean validDumpKey(String key) {
+		return key != null && (key.startsWith("e:") || key.startsWith("b:")) && !key.contains("..");
+	}
+
+	private static void applyDump() {
+		for (String key : visible) {
+			if (editing(key)) {
+				continue;
 			}
+			CloudPose cloud = dump.get(key);
+			if (cloud == null) {
+				if (status.getOrDefault(key, UNKNOWN) == POSED) {
+					ClientFramePoses.applyCloud(key, FramePose.IDENTITY);
+				}
+				status.put(key, EMPTY);
+				continue;
+			}
+			ClientFramePoses.applyCloud(key, cloud.toPose());
+			status.put(key, POSED);
 		}
+	}
+
+	private static boolean editing(String key) {
+		if (outbound.containsKey(key)) {
+			return true;
+		}
+		return FramePoserScreen.current != null && FramePoserScreen.current.ownsCloudKey(key);
 	}
 
 	private static void send(String method, URI uri, String json) {
@@ -319,8 +378,12 @@ public final class PoseCloud {
 		return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
 	}
 
-	private static final class QueryBody {
-		List<String> keys;
+	private static final class Outgoing {
+		String server;
+		String key;
+		String json;
+		boolean empty;
+		long due;
 	}
 
 	private static final class QueryResult {

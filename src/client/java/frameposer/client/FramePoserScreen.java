@@ -55,6 +55,13 @@ public class FramePoserScreen extends Screen {
 		return current != null && current.snapshot != null && current.snapshot.handle().equals(handle);
 	}
 
+	boolean ownsCloudKey(String key) {
+		if (this.snapshot == null || this.minecraft == null || this.minecraft.level == null) {
+			return false;
+		}
+		return key.equals(ClientFramePoses.cloudKey(this.minecraft.level, this.snapshot.handle()));
+	}
+
 	public boolean isValid() {
 		return this.snapshot != null;
 	}
@@ -382,6 +389,7 @@ public class FramePoserScreen extends Screen {
 		if (this.packetWaiting) {
 			this.sendPacket();
 		}
+		PoseCloud.flush();
 		ClientFramePoses.flush();
 		current = null;
 		super.onClose();

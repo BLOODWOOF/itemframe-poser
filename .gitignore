@@ -7,5 +7,7 @@ run/
 bin/
 out/
 relay/data/
+store/data/
+store/node_modules/
 worker/.wrangler/
 worker/node_modules/

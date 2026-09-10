@@ -2,6 +2,17 @@ name = "frameposer-store"
 main = "src/index.js"
 compatibility_date = "2026-09-09"
 
-[[kv_namespaces]]
-binding = "POSES"
-id = "228ba426fb14492da0b3e58b36d6dd57"
+[cache]
+enabled = true
+
+[placement]
+mode = "smart"
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "frameposer-poses"
+database_id = "ed7acff9-f56d-4d32-a5bb-59cafae06e24"

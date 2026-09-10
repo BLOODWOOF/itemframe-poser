@@ -94,7 +94,7 @@ public final class ClientFramePoses {
 	private static void writeBlock(String key, FramePose next) {
 		if (next.equals(FramePose.IDENTITY)) {
 			BLOCKS.remove(key);
-		} else {
+		} else if (!next.equals(BLOCKS.get(key))) {
 			BLOCKS.put(key, next);
 		}
 	}
@@ -102,7 +102,7 @@ public final class ClientFramePoses {
 	private static void writeEntity(UUID id, FramePose next) {
 		if (next.equals(FramePose.IDENTITY)) {
 			ENTITIES.remove(id);
-		} else {
+		} else if (!next.equals(ENTITIES.get(id))) {
 			ENTITIES.put(id, next);
 		}
 	}
