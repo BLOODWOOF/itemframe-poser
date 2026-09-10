@@ -1,0 +1,11 @@
+.gradle/
+build/
+run/
+*.iml
+.idea/
+.vscode/
+bin/
+out/
+relay/data/
+worker/.wrangler/
+worker/node_modules/

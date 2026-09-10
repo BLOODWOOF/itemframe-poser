@@ -1,0 +1,16 @@
+{
+	"required": true,
+	"package": "frameposer.mixin",
+	"plugin": "frameposer.mixin.FramePoserMixinPlugin",
+	"compatibilityLevel": "JAVA_25",
+	"mixins": [
+		"ItemFrameAccessor",
+		"fastitemframes.ItemFrameHandlerMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

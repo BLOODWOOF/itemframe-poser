@@ -1,0 +1,37 @@
+{
+	"schemaVersion": 1,
+	"id": "frameposer",
+	"version": "${version}",
+	"name": "Item Frame Poser",
+	"description": "Look at an item frame and press a keybind to pose the displayed item.",
+	"authors": [
+		"BLOODWOLF"
+	],
+	"license": "MIT",
+	"icon": "assets/frameposer/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"frameposer.FramePoser"
+		],
+		"client": [
+			"frameposer.FramePoserClient"
+		]
+	},
+	"mixins": [
+		"frameposer.mixins.json",
+		{
+			"config": "frameposer.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"fastitemframes": "*"
+	}
+}

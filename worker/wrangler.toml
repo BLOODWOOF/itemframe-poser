@@ -1,0 +1,7 @@
+name = "frameposer-store"
+main = "src/index.js"
+compatibility_date = "2026-09-09"
+
+[[kv_namespaces]]
+binding = "POSES"
+id = "228ba426fb14492da0b3e58b36d6dd57"
