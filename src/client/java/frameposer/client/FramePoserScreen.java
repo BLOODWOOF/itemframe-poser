@@ -42,6 +42,7 @@ public class FramePoserScreen extends Screen {
 	private boolean lastNetworked = true;
 	private boolean lastCanGlow = true;
 	private boolean swapping;
+	private FramePose lastPivotPose;
 
 	public FramePoserScreen(FrameHandle handle) {
 		super(Component.translatable("frameposer.gui.title"));
@@ -49,6 +50,9 @@ public class FramePoserScreen extends Screen {
 		this.snapshot = FrameLookup.snapshot(minecraft.level, handle);
 		if (this.snapshot != null && minecraft.level != null) {
 			this.snapshot = this.snapshot.withPose(ClientFramePoses.overlay(minecraft.level, handle, this.snapshot.pose()));
+		}
+		if (this.snapshot != null) {
+			this.lastPivotPose = this.snapshot.pose();
 		}
 	}
 
@@ -95,6 +99,7 @@ public class FramePoserScreen extends Screen {
 		var next = FrameLookup.snapshot(this.minecraft.level, handle);
 		if (next != null) {
 			this.snapshot = next.withPose(ClientFramePoses.overlay(this.minecraft.level, handle, next.pose()));
+			this.lastPivotPose = this.snapshot.pose();
 		}
 	}
 
@@ -319,10 +324,10 @@ public class FramePoserScreen extends Screen {
 	}
 
 	private void applyLocal() {
-		if (this.minecraft == null || this.minecraft.level == null) {
+		if (this.minecraft == null || this.minecraft.level == null || this.snapshot == null) {
 			return;
 		}
-		ClientFramePoses.store(this.minecraft.level, this.snapshot.handle(), this.snapshot.pose());
+		this.paint(this.targets(), false);
 	}
 
 	private void flushNow() {
@@ -375,19 +380,31 @@ public class FramePoserScreen extends Screen {
 	}
 
 	private void applyPoseTo(List<FrameHandle> handles) {
+		this.paint(handles, true);
+	}
+
+	private void paint(List<FrameHandle> handles, boolean send) {
 		if (this.minecraft == null || this.minecraft.level == null || this.minecraft.player == null || this.snapshot == null) {
 			return;
 		}
 		FramePose pose = this.snapshot.pose();
+		FramePose from = this.lastPivotPose == null ? pose : this.lastPivotPose;
+		FrameHandle pivot = this.snapshot.handle();
 		boolean invisible = this.snapshot.invisible();
 		boolean wantGlow = this.snapshot.glowing();
-		boolean networked = ClientPlayNetworking.canSend(UpdateFramePosePayload.TYPE);
+		boolean networked = send && ClientPlayNetworking.canSend(UpdateFramePosePayload.TYPE);
 		int sacs = GlowInk.count(this.minecraft.player);
 		boolean creative = this.minecraft.player.hasInfiniteMaterials();
+		boolean spread = handles.size() > 1;
 		for (FrameHandle handle : handles) {
 			var live = FrameLookup.snapshot(this.minecraft.level, handle);
 			if (live == null) {
 				continue;
+			}
+			FramePose old = ClientFramePoses.overlay(this.minecraft.level, handle, live.pose());
+			FramePose next = pose;
+			if (spread && !handle.equals(pivot)) {
+				next = FrameGroupLayout.follow(this.minecraft.level, pivot, from, pose, handle, old);
 			}
 			boolean glow = wantGlow;
 			if (glow && !live.glowing()) {
@@ -397,12 +414,15 @@ public class FramePoserScreen extends Screen {
 					sacs--;
 				}
 			}
-			ClientFramePoses.store(this.minecraft.level, handle, pose);
-			PoseCloud.push(this.minecraft.level, handle, pose);
-			if (networked) {
-				ClientPlayNetworking.send(new UpdateFramePosePayload(handle, pose, invisible, glow));
+			ClientFramePoses.store(this.minecraft.level, handle, next);
+			if (send) {
+				PoseCloud.push(this.minecraft.level, handle, next);
+				if (networked) {
+					ClientPlayNetworking.send(new UpdateFramePosePayload(handle, next, invisible, glow));
+				}
 			}
 		}
+		this.lastPivotPose = pose;
 	}
 
 	@Override

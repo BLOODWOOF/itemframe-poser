@@ -21,7 +21,7 @@ Look at a frame from close range and press **K**. That key can be changed in Con
 
 The menu sits on the left so the frame stays in view. Scroll over a number to nudge it. Hold Shift for bigger steps, or Ctrl for finer ones.
 
-**Group** lets you pose a bunch of frames at once, same idea as Armor Poser. Pick a numbered group, look at another frame and press **K** to add or remove it, or use the nearby list. **Pose Group** copies the current pose onto every member. Turn on **Group Edit** if you want slider drags to hit the whole group. Glow still costs one Glow Ink Sac per frame that turns on.
+**Group** lets you pose a bunch of frames at once, same idea as Armor Poser. Pick a numbered group, look at another frame and press **K** to add or remove it, or use the nearby list. **Pose Group** copies the current pose onto every member. Turn on **Group Edit** if you want slider drags to hit the whole group. Scaling a group grows it from the frame you are editing, so map art stays in one piece. Glow still costs one Glow Ink Sac per frame that turns on.
 
 Turning **Glowing** on uses one Glow Ink Sac in Survival. Creative mode does not charge you.
 
