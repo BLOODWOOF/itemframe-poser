@@ -395,7 +395,8 @@ public class FramePoserScreen extends Screen {
 		boolean networked = send && ClientPlayNetworking.canSend(UpdateFramePosePayload.TYPE);
 		int sacs = GlowInk.count(this.minecraft.player);
 		boolean creative = this.minecraft.player.hasInfiniteMaterials();
-		boolean spread = handles.size() > 1;
+		boolean spread = handles.size() > 1
+			&& FrameGroupLayout.isMap(this.minecraft.level, pivot);
 		for (FrameHandle handle : handles) {
 			var live = FrameLookup.snapshot(this.minecraft.level, handle);
 			if (live == null) {
@@ -403,7 +404,7 @@ public class FramePoserScreen extends Screen {
 			}
 			FramePose old = ClientFramePoses.overlay(this.minecraft.level, handle, live.pose());
 			FramePose next = pose;
-			if (spread && !handle.equals(pivot)) {
+			if (spread && !handle.equals(pivot) && FrameGroupLayout.isMap(this.minecraft.level, handle)) {
 				next = FrameGroupLayout.follow(this.minecraft.level, pivot, from, pose, handle, old);
 			}
 			boolean glow = wantGlow;

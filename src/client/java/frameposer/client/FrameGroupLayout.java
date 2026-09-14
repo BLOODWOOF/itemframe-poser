@@ -13,12 +13,16 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.Vec3;
 
-// when a group scales, shove each frame's offset so map tiles stay stuck together
+// when a group of maps scales, shove offsets so the tiles stay stuck together
 public final class FrameGroupLayout {
 	private static final double MAP_UNIT = 0.0078125;
-	private static final double ITEM_UNIT = 0.5;
 
 	private FrameGroupLayout() {
+	}
+
+	public static boolean isMap(Level level, FrameHandle handle) {
+		ItemStack item = FrameLookup.item(level, handle);
+		return item != null && item.is(Items.FILLED_MAP);
 	}
 
 	public static FramePose follow(
@@ -29,6 +33,9 @@ public final class FrameGroupLayout {
 		FrameHandle member,
 		FramePose oldMember
 	) {
+		if (!isMap(level, pivot) || !isMap(level, member)) {
+			return nextPivot;
+		}
 		float from = oldMember.scale() <= 0.0F ? 1.0F : oldMember.scale();
 		double ratio = nextPivot.scale() / from;
 		Vec3 oldPivotAt = visual(level, pivot, oldPivot);
@@ -79,24 +86,20 @@ public final class FrameGroupLayout {
 	}
 
 	private static Vec3 offsetToWorld(Level level, FrameHandle handle, float offX, float offY, float offZ) {
-		boolean map = isMap(level, handle);
-		double unit = map ? MAP_UNIT : ITEM_UNIT;
-		Vec3 local = new Vec3(offX * unit, offY * unit, offZ * unit);
-		local = rotateZ(local, zRot(level, handle, map));
+		Vec3 local = new Vec3(offX * MAP_UNIT, offY * MAP_UNIT, offZ * MAP_UNIT);
+		local = rotateZ(local, zRot(level, handle));
 		return rotateFacing(local, facing(level, handle));
 	}
 
 	private static Vec3 worldToOffset(Level level, FrameHandle handle, Vec3 world) {
-		boolean map = isMap(level, handle);
-		double unit = map ? MAP_UNIT : ITEM_UNIT;
 		Vec3 local = unrotateFacing(world, facing(level, handle));
-		local = rotateZ(local, -zRot(level, handle, map));
-		return new Vec3(local.x / unit, local.y / unit, local.z / unit);
+		local = rotateZ(local, -zRot(level, handle));
+		return new Vec3(local.x / MAP_UNIT, local.y / MAP_UNIT, local.z / MAP_UNIT);
 	}
 
-	private static float zRot(Level level, FrameHandle handle, boolean map) {
+	private static float zRot(Level level, FrameHandle handle) {
 		int rotation = rotation(level, handle);
-		return map ? (rotation % 4) * 90.0F + 180.0F : rotation * 45.0F;
+		return (rotation % 4) * 90.0F + 180.0F;
 	}
 
 	private static Direction facing(Level level, FrameHandle handle) {
@@ -150,11 +153,6 @@ public final class FrameGroupLayout {
 			}
 		}
 		return 0;
-	}
-
-	private static boolean isMap(Level level, FrameHandle handle) {
-		ItemStack item = FrameLookup.item(level, handle);
-		return item != null && item.is(Items.FILLED_MAP);
 	}
 
 	private static Vec3 rotateFacing(Vec3 local, Direction facing) {

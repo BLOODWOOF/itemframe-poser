@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import frameposer.FastFrames;
 import frameposer.FrameHandle;
 import frameposer.FramePose;
+import frameposer.FramePoser;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -19,6 +20,10 @@ import java.util.Map;
 import java.util.Set;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.AlertScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -34,6 +39,7 @@ public final class PoseCloud {
 	private static final long PUSH_GAP_MS = 1000L;
 	private static final long DUMP_POSED_MS = 2000L;
 	private static final long DUMP_EMPTY_MS = 5000L;
+	private static final long VERSION_RETRY_MS = 5000L;
 
 	private static final byte UNKNOWN = 0;
 	private static final byte EMPTY = 1;
@@ -59,13 +65,20 @@ public final class PoseCloud {
 	private static String lastServer;
 	private static int settleTicks;
 	private static boolean fifLoaded = FabricLoader.getInstance().isModLoaded("fastitemframes");
+	private static Boolean allowed;
+	private static String latestVersion = "";
+	private static boolean checking;
+	private static boolean noticeShown;
+	private static long checkAt;
 
 	private PoseCloud() {
 	}
 
 	public static void tick(Minecraft client) {
+		pollVersion();
+		showNotice(client);
 		flushPushes(false);
-		if (client.player == null || client.level == null || !ClientFramePoses.multiplayer()) {
+		if (client.player == null || client.level == null || !ClientFramePoses.multiplayer() || !cloudReady()) {
 			return;
 		}
 		String server = ClientFramePoses.serverKey();
@@ -107,7 +120,7 @@ public final class PoseCloud {
 	}
 
 	public static void push(Level level, FrameHandle handle, FramePose pose) {
-		if (!ClientFramePoses.multiplayer()) {
+		if (!ClientFramePoses.multiplayer() || allowed == Boolean.FALSE) {
 			return;
 		}
 		String key = ClientFramePoses.cloudKey(level, handle);
@@ -166,6 +179,13 @@ public final class PoseCloud {
 		if (outbound.isEmpty()) {
 			return;
 		}
+		if (allowed == null) {
+			return;
+		}
+		if (allowed == Boolean.FALSE) {
+			outbound.clear();
+			return;
+		}
 		String base = baseUrl();
 		if (base == null) {
 			outbound.clear();
@@ -201,14 +221,14 @@ public final class PoseCloud {
 
 	private static void fetchDump(String server) {
 		String base = baseUrl();
-		if (base == null) {
+		if (base == null || !cloudReady()) {
 			return;
 		}
 		querying = true;
 		HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(base + "/v1/servers/" + enc(server)))
 			.timeout(TIMEOUT)
-			.header("User-Agent", "FramePoser")
 			.GET();
+		stamp(builder);
 		if (!dumpEtag.isEmpty()) {
 			builder.header("If-None-Match", dumpEtag);
 		}
@@ -220,6 +240,10 @@ public final class PoseCloud {
 					return;
 				}
 				int code = response.statusCode();
+				if (code == 426) {
+					Minecraft.getInstance().execute(() -> blockFrom(response.body()));
+					return;
+				}
 				if (code == 304) {
 					Minecraft.getInstance().execute(() -> {
 						dumpAt = System.currentTimeMillis();
@@ -299,19 +323,24 @@ public final class PoseCloud {
 
 	private static void send(String method, URI uri, String json) {
 		HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
-			.timeout(TIMEOUT)
-			.header("User-Agent", "FramePoser");
+			.timeout(TIMEOUT);
+		stamp(builder);
 		if ("DELETE".equals(method)) {
 			builder.DELETE();
 		} else {
 			builder.header("Content-Type", "application/json");
 			builder.method(method, HttpRequest.BodyPublishers.ofString(json));
 		}
-		HTTP.sendAsync(builder.build(), HttpResponse.BodyHandlers.discarding());
+		HTTP.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
+			.whenComplete((response, error) -> {
+				if (response != null && response.statusCode() == 426) {
+					Minecraft.getInstance().execute(() -> blockFrom(response.body()));
+				}
+			});
 	}
 
 	private static boolean queue(String key) {
-		if (key == null || !ClientFramePoses.multiplayer()) {
+		if (key == null || !ClientFramePoses.multiplayer() || !cloudReady()) {
 			return false;
 		}
 		if (!status.containsKey(key) || status.get(key) == UNKNOWN) {
@@ -385,6 +414,140 @@ public final class PoseCloud {
 		return url;
 	}
 
+	private static boolean cloudReady() {
+		return allowed == Boolean.TRUE;
+	}
+
+	private static boolean unlocked() {
+		return FabricLoader.getInstance().isDevelopmentEnvironment();
+	}
+
+	// skip the lock while im testing in gradle, and dont nag if this build is newer
+	private static void pollVersion() {
+		if (unlocked()) {
+			allowed = Boolean.TRUE;
+			return;
+		}
+		if (allowed != null || checking) {
+			return;
+		}
+		String base = baseUrl();
+		if (base == null) {
+			allowed = Boolean.TRUE;
+			return;
+		}
+		long now = System.currentTimeMillis();
+		if (checkAt != 0 && now - checkAt < VERSION_RETRY_MS) {
+			return;
+		}
+		checking = true;
+		checkAt = now;
+		HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(base + "/v1/version"))
+			.timeout(TIMEOUT)
+			.GET();
+		stamp(builder);
+		HTTP.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
+			.whenComplete((response, error) -> Minecraft.getInstance().execute(() -> {
+				checking = false;
+				if (unlocked()) {
+					allowed = Boolean.TRUE;
+					return;
+				}
+				if (error != null || response == null || response.statusCode() / 100 != 2) {
+					allowed = Boolean.TRUE;
+					return;
+				}
+				VersionResult result = GSON.fromJson(response.body(), VersionResult.class);
+				String remote = result == null || result.version == null ? "" : result.version.trim();
+				latestVersion = remote;
+				if (remote.isEmpty() || atLeast(FramePoser.version(), remote)) {
+					allowed = Boolean.TRUE;
+					return;
+				}
+				allowed = Boolean.FALSE;
+			}));
+	}
+
+	private static void blockFrom(String body) {
+		if (unlocked()) {
+			allowed = Boolean.TRUE;
+			return;
+		}
+		String remote = latestVersion;
+		try {
+			VersionResult result = GSON.fromJson(body, VersionResult.class);
+			if (result != null && result.version != null && !result.version.isBlank()) {
+				remote = result.version.trim();
+				latestVersion = remote;
+			}
+		} catch (Exception ignored) {
+		}
+		if (remote.isEmpty() || atLeast(FramePoser.version(), remote)) {
+			allowed = Boolean.TRUE;
+			return;
+		}
+		allowed = Boolean.FALSE;
+		outbound.clear();
+	}
+
+	private static boolean atLeast(String have, String need) {
+		int[] left = parseVersion(have);
+		int[] right = parseVersion(need);
+		for (int i = 0; i < 3; i++) {
+			if (left[i] != right[i]) {
+				return left[i] > right[i];
+			}
+		}
+		return true;
+	}
+
+	private static int[] parseVersion(String value) {
+		String core = value == null ? "0" : value.split("[+-]", 2)[0];
+		String[] parts = core.split("\\.");
+		int[] out = new int[3];
+		for (int i = 0; i < 3; i++) {
+			if (i < parts.length) {
+				try {
+					out[i] = Integer.parseInt(parts[i]);
+				} catch (NumberFormatException ignored) {
+					out[i] = 0;
+				}
+			}
+		}
+		return out;
+	}
+
+	private static void showNotice(Minecraft client) {
+		if (noticeShown || allowed != Boolean.FALSE || unlocked() || client.gui == null) {
+			return;
+		}
+		Screen screen = client.gui.screen();
+		if (screen instanceof AlertScreen) {
+			return;
+		}
+		boolean title = screen instanceof TitleScreen;
+		boolean world = client.player != null && screen == null;
+		if (!title && !world) {
+			return;
+		}
+		noticeShown = true;
+		Screen parent = screen;
+		String latest = latestVersion.isEmpty() ? FramePoser.version() : latestVersion;
+		client.gui.setScreen(new AlertScreen(
+			() -> client.gui.setScreen(parent),
+			Component.translatable("frameposer.gui.update.title"),
+			Component.translatable("frameposer.gui.update.body", latest),
+			Component.translatable("gui.ok"),
+			true
+		));
+	}
+
+	private static void stamp(HttpRequest.Builder builder) {
+		String version = FramePoser.version();
+		builder.header("User-Agent", "FramePoser/" + version);
+		builder.header("X-FramePoser-Version", version);
+	}
+
 	private static URI uri(String base, String server, String frame) {
 		return URI.create(base + "/v1/servers/" + enc(server) + "/frames/" + enc(frame));
 	}
@@ -403,6 +566,10 @@ public final class PoseCloud {
 
 	private static final class QueryResult {
 		Map<String, CloudPose> frames;
+	}
+
+	private static final class VersionResult {
+		String version;
 	}
 
 	private static final class CloudPose {

@@ -44,11 +44,13 @@
 	"frameposer.gui.tooltip.group_slot": "Select group %s",
 	"frameposer.gui.tooltip.range": "How far to look for frames",
 	"frameposer.gui.tooltip.pose_group": "Copy this pose onto every frame in the selected group",
-	"frameposer.gui.tooltip.group_edit": "Slider changes apply to the whole group. Scale keeps maps stuck together",
+	"frameposer.gui.tooltip.group_edit": "Slider changes apply to the whole group. Maps scale as one picture",
 	"frameposer.gui.tooltip.clear_group": "Remove every frame from this group",
 	"frameposer.gui.tooltip.locate": "Look at the selected frame",
 	"frameposer.gui.tooltip.modify": "Open the poser for this frame",
 	"frameposer.gui.presets.empty": "No saved poses yet",
+	"frameposer.gui.update.title": "Item Frame Poser",
+	"frameposer.gui.update.body": "Please update Item Frame Poser to %s. You will not see posed frames unless you are on the latest version.",
 	"key.frameposer.open": "Pose Item Frame",
 	"key.category.frameposer.general": "Item Frame Poser"
 }

@@ -15,6 +15,14 @@ export default {
 		const queryMatch = url.pathname.match(/^\/v1\/servers\/([^/]+)\/query$/);
 		const dumpMatch = url.pathname.match(/^\/v1\/servers\/([^/]+)$/);
 
+		if (url.pathname === "/v1/version" && request.method === "GET") {
+			return cors(json(200, { version: latest(env) }));
+		}
+
+		if ((putMatch || queryMatch || dumpMatch) && !versionOk(request, env)) {
+			return cors(json(426, { error: "upgrade", version: latest(env) }));
+		}
+
 		try {
 			if (putMatch && request.method === "PUT") {
 				return cors(await putFrame(env, decode(putMatch[1]), decode(putMatch[2]), request));
@@ -40,6 +48,36 @@ const SERVER_OK = /^[A-Za-z0-9._-]{1,80}$/;
 const MAX_BODY = 64 * 1024;
 const MAX_KEYS = 64;
 const SKIP = "b:__migrated|0,0,0";
+const ALLOW_HEADERS = "Content-Type, User-Agent, If-None-Match, X-FramePoser-Version";
+
+function latest(env) {
+	return String((env && env.LATEST_VERSION) || "1.3.5");
+}
+
+function versionOk(request, env) {
+	const got = request.headers.get("X-FramePoser-Version") || "";
+	return !!got && versionAtLeast(got, latest(env));
+}
+
+function versionAtLeast(got, need) {
+	const a = parseVer(got);
+	const b = parseVer(need);
+	for (let i = 0; i < 3; i++) {
+		if (a[i] > b[i]) {
+			return true;
+		}
+		if (a[i] < b[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+function parseVer(value) {
+	const core = String(value || "").split(/[+-]/)[0];
+	const parts = core.split(".");
+	return [Number(parts[0]) || 0, Number(parts[1]) || 0, Number(parts[2]) || 0];
+}
 
 function decode(value) {
 	try {
@@ -200,7 +238,7 @@ async function getDump(env, server, request) {
 			"Cache-Control": "public, max-age=2",
 			"Access-Control-Allow-Origin": "*",
 			"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-			"Access-Control-Allow-Headers": "Content-Type, User-Agent, If-None-Match",
+			"Access-Control-Allow-Headers": ALLOW_HEADERS,
 		},
 	});
 }
@@ -238,7 +276,7 @@ function json(status, payload) {
 			"Cache-Control": "no-store",
 			"Access-Control-Allow-Origin": "*",
 			"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-			"Access-Control-Allow-Headers": "Content-Type, User-Agent, If-None-Match",
+			"Access-Control-Allow-Headers": ALLOW_HEADERS,
 		},
 	});
 }
@@ -246,6 +284,6 @@ function json(status, payload) {
 function cors(response) {
 	response.headers.set("Access-Control-Allow-Origin", "*");
 	response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-	response.headers.set("Access-Control-Allow-Headers", "Content-Type, User-Agent, If-None-Match");
+	response.headers.set("Access-Control-Allow-Headers", ALLOW_HEADERS);
 	return response;
 }
