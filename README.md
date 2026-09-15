@@ -1,34 +1,83 @@
 # Item Frame Poser
 
-Look at an item frame and press **K** to pose the item sitting in it. Rotate it, nudge it, scale it, save presets, and copy a pose onto another frame. The world stays running while the menu is open, so you can actually see what you're doing.
+Pose items in item frames with rotation, position, and scale controls.
 
-Made by **BLOODWOLF** for Fabric on **Minecraft 26.2**.
+Look at an item frame and press **K** to open the editor. You can rotate the item, move it around, scale it, save poses as presets, and copy poses between frames. The world keeps running while the menu is open, so you can see your changes as you make them.
 
 ## Features
 
-- Rotation on X, Y, and Z
-- Offset on X, Y, and Z
-- Uniform scale
-- Invisible, fixed, glowing, and invulnerable toggles
-- Copy, paste, reset, named presets, and frame groups
-- Works on vanilla item frames and [Fast Item Frames](https://modrinth.com/mod/fast-item-frames)
-- Other players with this mod can see your poses
-- Players without the mod still see a normal item frame
-- Multiplayer pose sync needs everyone on the latest Item Frame Poser
+- Rotate items on the X, Y, and Z axes
+- Move items on the X, Y, and Z axes
+- Uniform item scaling
+- Toggle item frames as invisible, fixed, glowing, or invulnerable
+- Copy, paste, and reset poses
+- Save and load named presets
+- Create and edit groups of item frames
+- Works with vanilla item frames and [Fast Item Frames](https://modrinth.com/mod/fast-item-frames)
+- Multiplayer pose synchronization
+- Players without the mod still see item frames normally
 
 ## How to use
 
-Look at a frame from close range and press **K**. That key can be changed in Controls under Item Frame Poser.
+### Opening the editor
 
-The menu sits on the left so the frame stays in view. Scroll over a number to nudge it. Hold Shift for bigger steps, or Ctrl for finer ones.
+Look at an item frame from close range and press **K**.
 
-**Group** lets you pose a bunch of frames at once, same idea as Armor Poser. Pick a numbered group, look at another frame and press **K** to add or remove it, or use the nearby list. **Pose Group** copies the current pose onto every member. Turn on **Group Edit** if you want slider drags to hit the whole group. Scaling a group of maps grows the picture from the frame you are editing so the tiles stay in one piece. Other items still scale from their own frame. Glow still costs one Glow Ink Sac per frame that turns on.
+The keybind can be changed in:
 
-Turning **Glowing** on uses one Glow Ink Sac in Survival. Creative mode does not charge you.
+**Options → Controls → Item Frame Poser**
 
-**Invisible**, **Fixed**, **Glowing**, and **Invulnerable** only apply for everyone if Item Frame Poser is also on the Minecraft server. The pose itself (rotation, offset, scale) still shows up for other people who have the mod.
+The editor stays on the left side of the screen so the item frame remains visible while you're editing it.
 
-Sneak right-click is left alone, so Fast Item Frames can keep using it to hide frames.
+### Adjusting values
+
+Scroll over a value to change it.
+
+- **Shift** for larger adjustments
+- **Ctrl** for smaller adjustments
+
+### Groups
+
+Groups let you edit multiple item frames together.
+
+Select a numbered group, look at another item frame, and press **K** to add or remove it. You can also manage group members from the list in the editor.
+
+**Pose Group** copies the current pose to every frame in the group.
+
+Enable **Group Edit** to apply slider changes to the entire group.
+
+### Maps
+
+Groups work with multi-frame map displays as well. Scaling a group of maps scales the map artwork from the frame being edited, keeping the tiles aligned.
+
+Other items in a group continue to scale from their individual frames.
+
+### Glowing frames
+
+Turning on **Glowing** uses one Glow Ink Sac per frame in Survival.
+
+Creative mode does not consume Glow Ink Sacs.
+
+### Multiplayer
+
+Other players using Item Frame Poser can see your custom poses.
+
+The following frame properties require Item Frame Poser to also be installed on the server:
+
+- Invisible
+- Fixed
+- Glowing
+- Invulnerable
+
+Pose data such as rotation, position, and scale can still be seen by other players using the mod when the mod is only installed on the client.
+
+Players without the mod will see the item frame normally.
+
+For multiplayer pose synchronization, everyone using the mod should be running the latest version.
+
+### Fast Item Frames
+
+Sneak right-click is left unchanged so that [Fast Item Frames](https://modrinth.com/mod/fast-item-frames) can continue using it to hide item frames.
 
 ## Requirements
 
@@ -38,4 +87,4 @@ Sneak right-click is left alone, so Fast Item Frames can keep using it to hide f
 
 ## License
 
-[MIT](LICENSE). Copyright (c) 2026 BLOODWOLF.
+[MIT License](LICENSE)
